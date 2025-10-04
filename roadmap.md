@@ -1,6 +1,6 @@
 ## mvp plan — reminders with spaced repetition basics
 
--### scope
+### scope
 - Create reminders with: `createdAt`, `nextRepeatedAt`, `status`.
 - Home shows a grid of tiles sorted by `nextRepeatedAt` ascending; overdue at the top.
 - Filters by `status`: Active (default) and Done.
@@ -11,6 +11,7 @@
 - As a user, I see my active reminders sorted by the next repetition date.
 - As a user, I click "Repeat in X days" and can edit `X` inline to set a custom value.
 - As a user, I mark a reminder as done to move it out of Active.
+- As a user, I can restore a reminder from Done back to Active if I need it again.
 - As a user, I return later and my data persists locally; if I log in, it syncs.
 
 ### data model
@@ -40,6 +41,7 @@
   - 0–33% elapsed → high, 34–66% → medium, 67–100% → low.
 - Primary button: "Repeat in X days" with `X` as an inline editable number input (1–365).
 - "Mark done" sets `status = 'done'` and hides it from Active; remains in Done.
+- "Restore" on Done tiles sets `status = 'active'` and shows it in Active again.
 - Empty states: show a quick add CTA when no Active reminders.
 - No keyboard shortcuts in MVP.
 
