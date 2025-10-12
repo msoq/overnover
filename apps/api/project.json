@@ -1,0 +1,21 @@
+{
+    "$schema": "https://json.schemastore.org/nx-project",
+    "name": "api",
+    "projectType": "application",
+    "root": "apps/api",
+    "sourceRoot": "apps/api",
+    "targets": {
+        "serve": {
+            "executor": "nx:run-commands",
+            "options": {
+                "command": "cd apps/api && go run ./cmd/api"
+            }
+        },
+        "test": {
+            "executor": "nx:run-commands",
+            "options": {
+                "command": "cd apps/api && go test ./..."
+            }
+        }
+    }
+}
