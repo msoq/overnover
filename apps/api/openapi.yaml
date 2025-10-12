@@ -1,0 +1,21 @@
+openapi: 3.1.0
+info:
+  title: Hello World API
+  version: 0.1.0
+paths:
+  /:
+    get:
+      summary: Greeting
+      description: Returns plain text greeting for environment verification.
+      responses:
+        "200":
+          description: OK
+          content:
+            text/plain:
+              schema:
+                type: string
+                example: Hello World!
+        "404":
+          description: Not Found
+        "500":
+          description: Server Error

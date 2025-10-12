@@ -47,6 +47,9 @@ Design for failure. Show helpful errors, keep user data safe, and degrade gracef
 - Manual checks per change: keyboard navigation, focus order, contrast, title/summary, and first view speed.
 - Document user-facing behavior and any trade-offs made for simplicity or performance.
 
+## Changelog
+When adding features or making changes, update the [CHANGELOG.md](CHANGELOG.md) file. See the [changelog template](.github/CHANGELOG_TEMPLATE.md) for guidelines.
+
 ## Governance
 
 - This constitution guides design, build, and review decisions for the app.

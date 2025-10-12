@@ -1,0 +1,14 @@
+{
+    "name": "overnover",
+    "private": true,
+    "version": "0.0.0",
+    "scripts": {
+        "dev": "nx run api:serve",
+        "test": "nx run-many -t test",
+        "test:affected": "nx affected -t test",
+        "test:api": "nx run api:test"
+    },
+    "devDependencies": {
+        "nx": "^20.1.0"
+    }
+}
