@@ -1,0 +1,135 @@
+# Checks, provisions and deploys one environment. Secrets and variables come from
+# the GitHub Environment of the same name (dev or prod); see the README.
+name: Deploy overnover
+
+on:
+  workflow_call:
+    inputs:
+      deployment_environment:
+        required: true
+        type: string
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm typecheck
+      - run: pnpm test
+
+  infrastructure:
+    needs: check
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deployment_environment }}
+    outputs:
+      pages_project_name: ${{ steps.out.outputs.pages_project_name }}
+      production_branch: ${{ steps.out.outputs.production_branch }}
+      web_origin: ${{ steps.out.outputs.web_origin }}
+    defaults:
+      run:
+        working-directory: infra
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.TF_STATE_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.TF_STATE_SECRET_ACCESS_KEY }}
+      AWS_ENDPOINT_URL_S3: https://${{ secrets.CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
+      TF_VAR_account_id: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      TF_VAR_environment: ${{ inputs.deployment_environment }}
+      TF_VAR_domain: ${{ vars.WEB_DOMAIN }}
+      TF_VAR_zone_id: ${{ vars.CLOUDFLARE_ZONE_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: opentofu/setup-opentofu@v2
+        with:
+          tofu_version: 1.12.5
+          tofu_wrapper: false
+      - name: tofu init
+        run: >
+          tofu init -input=false
+          -backend-config="bucket=${{ vars.TF_STATE_BUCKET || 'overnover-tfstate' }}"
+          -backend-config="key=${{ inputs.deployment_environment }}/overnover.tfstate"
+          -backend-config="region=auto"
+          -backend-config="use_path_style=true"
+          -backend-config="skip_credentials_validation=true"
+          -backend-config="skip_region_validation=true"
+          -backend-config="skip_requesting_account_id=true"
+          -backend-config="skip_metadata_api_check=true"
+          -backend-config="skip_s3_checksum=true"
+      - run: tofu apply -input=false -auto-approve
+      - id: out
+        run: |
+          echo "pages_project_name=$(tofu output -raw pages_project_name)" >> "$GITHUB_OUTPUT"
+          echo "production_branch=$(tofu output -raw production_branch)" >> "$GITHUB_OUTPUT"
+          echo "web_origin=$(tofu output -raw web_origin)" >> "$GITHUB_OUTPUT"
+
+  deploy-api:
+    needs: infrastructure
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deployment_environment }}
+    outputs:
+      api_url: ${{ steps.deploy.outputs.deployment-url }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - id: deploy
+        uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/api
+          packageManager: pnpm
+          # Dev also accepts the local web app (localhost:5173), so it can be pointed at the dev API.
+          command: >
+            deploy
+            ${{ inputs.deployment_environment == 'dev' && '--env dev' || '' }}
+            --var WEB_ORIGIN:${{ needs.infrastructure.outputs.web_origin }}${{ inputs.deployment_environment == 'dev' && ',http://localhost:5173' || '' }}
+      # Set after deploying so the very first run doesn't need the Worker to exist yet.
+      - name: Set the OpenRouter key
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: >
+          printf '%s' "$OPENROUTER_API_KEY" | pnpm exec wrangler secret put OPENROUTER_API_KEY
+          ${{ inputs.deployment_environment == 'dev' && '--env dev' || '' }}
+
+  deploy-web:
+    needs: [infrastructure, deploy-api]
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.deployment_environment }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @overnover/web build
+        env:
+          VITE_API_URL: ${{ needs.deploy-api.outputs.api_url }}
+          VITE_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+      - uses: cloudflare/wrangler-action@v4
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/web
+          packageManager: pnpm
+          command: >
+            pages deploy build/client
+            --project-name=${{ needs.infrastructure.outputs.pages_project_name }}
+            --branch=${{ needs.infrastructure.outputs.production_branch }}
+      - run: echo "Web app is live at ${{ needs.infrastructure.outputs.web_origin }}"

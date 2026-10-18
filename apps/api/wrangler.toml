@@ -1,0 +1,23 @@
+# Production Worker. The dev environment below is deployed with `wrangler deploy --env dev`.
+name = "overnover-api"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+minify = true
+
+[vars]
+OPENROUTER_MODEL = "anthropic/claude-haiku-5.5"
+# Comma-separated origins allowed to call the API. CI overrides it with the Pages URL from OpenTofu.
+WEB_ORIGIN = "http://localhost:5173"
+MOCK_AI = "0"
+
+[observability.logs]
+enabled = true
+invocation_logs = true
+
+[env.dev]
+name = "overnover-api-dev"
+
+[env.dev.vars]
+OPENROUTER_MODEL = "anthropic/claude-haiku-5.5"
+WEB_ORIGIN = "http://localhost:5173"
+MOCK_AI = "0"

@@ -1,0 +1,18 @@
+{
+  "name": "overnover",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter @overnover/api --filter @overnover/web run dev",
+    "build": "pnpm -r run build",
+    "typecheck": "pnpm -r run typecheck",
+    "test": "pnpm -r run test",
+    "check": "biome check .",
+    "format": "biome format . --write",
+    "deploy:prod": "bash scripts/ship.sh"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "typescript": "^5.9.3"
+  },
+  "packageManager": "pnpm@10.28.0"
+}
