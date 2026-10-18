@@ -1,6 +1,6 @@
 # Study App: Desired Functionality
 
-Status: revised with Mike on 2026-10-18 for review. The first version (open PR, Next.js) is to be rebuilt on the stack below. Items marked *(default)* are my proposals and weren't discussed explicitly.
+Status: agreed with Mike on 2026-10-18 and built on the stack below. Items marked *(default)* are my proposals and weren't discussed explicitly.
 
 ## Goal
 
@@ -126,7 +126,7 @@ Same setup as Mike's zabauki repo:
 
 ## Decisions and their reasons
 
-- **Next.js → React Router v7 + Hono:** Mike prefers not to use Next.js. Matching zabauki keeps one pattern across projects and leaves server rendering available for SEO.
+- **React Router v7 + Hono:** matches zabauki, keeping one pattern across projects, and leaves server rendering available for SEO.
 - **Dev/main branches, no PRs, OpenTofu for infrastructure:** same as zabauki, so environments can be recreated.
 - **Google Sheets over a database:** each user keeps their progress in their own account. Storing only current progress, with one read and one write per session, keeps it about as fast as a database.
 - **No full answer history:** dropped in favor of the light Sheets model above.
