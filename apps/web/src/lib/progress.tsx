@@ -12,8 +12,17 @@ import {
   useRef,
   useState,
 } from "react";
+import { useNavigate } from "react-router";
 import { STORAGE } from "./config";
-import { currentEmail, getAccessToken, signOut as googleSignOut, hasSignedInBefore } from "./google";
+import {
+  completeSignIn,
+  currentEmail,
+  signOut as googleSignOut,
+  hasSignedInBefore,
+  hasValidToken,
+  silentSignInFailed,
+  startSignIn,
+} from "./google";
 import { createStore } from "./storage";
 
 type Status = "starting" | "signed-out" | "loading" | "ready" | "error";
@@ -64,6 +73,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string>();
   const latest = useRef(progress);
+  const navigate = useNavigate();
 
   const write = useCallback(
     async (next: Progress) => {
@@ -102,12 +112,28 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (STORAGE === "local") {
       void load();
-    } else if (hasSignedInBefore()) {
-      getAccessToken(false).then(load, () => setStatus("signed-out"));
-    } else {
-      setStatus("signed-out");
+      return;
     }
-  }, [load]);
+    let cancelled = false;
+    void completeSignIn().then((result) => {
+      if (cancelled) return;
+      // Back from Google: drop the token from the address bar and return to where sign-in started.
+      if (result.kind !== "none") navigate(result.returnTo, { replace: true });
+      if (result.kind === "failed") {
+        setError(result.error);
+        setStatus("signed-out");
+      } else if (hasValidToken()) {
+        void load();
+      } else if (hasSignedInBefore() && !silentSignInFailed()) {
+        startSignIn({ silent: true });
+      } else {
+        setStatus("signed-out");
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [load, navigate]);
 
   const commit = useCallback(
     (change: (p: Progress) => Progress, persist = true) => {
@@ -131,13 +157,7 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     saving,
     saveError,
     async signIn() {
-      try {
-        await getAccessToken(true);
-        await load();
-      } catch (err) {
-        setError(err instanceof Error ? err.message : String(err));
-        setStatus("signed-out");
-      }
+      startSignIn();
     },
     signOut() {
       googleSignOut();
@@ -146,7 +166,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
       setStatus("signed-out");
     },
     async retrySave() {
-      if (STORAGE === "sheets") await getAccessToken(true);
+      // The unsaved snapshot stays in localStorage and is written after the redirect back.
+      if (STORAGE === "sheets" && !hasValidToken()) return startSignIn();
       await write(latest.current);
     },
     addTopic: (topic) => commit((p) => ({ ...p, topics: [topic, ...p.topics] })),

@@ -62,7 +62,13 @@ Create an API key at openrouter.ai/keys. Setting a credit limit on the key is a 
    - `http://localhost:5173`
    - your custom domain, if any
 
-   No redirect URIs are needed. If a Pages name was already taken, Cloudflare adds a suffix; use the URL the deploy log prints.
+   Authorized redirect URIs (sign-in happens in the same tab and Google returns to the site root, so keep the trailing slash):
+   - `https://overnover-prod.pages.dev/`
+   - `https://overnover-dev.pages.dev/`
+   - `http://localhost:5173/`
+   - your custom domain with a trailing `/`, if any
+
+   If a Pages name was already taken, Cloudflare adds a suffix; use the URL the deploy log prints.
 
 ### 4. GitHub
 
