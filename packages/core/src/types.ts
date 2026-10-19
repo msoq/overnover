@@ -16,6 +16,24 @@ export const EXERCISE_TYPE_LABELS: Record<ExerciseType, string> = {
   true_false: "True or false",
 };
 
+/** One short line above each exercise telling the learner what to do; the same every time for a type. */
+export function exerciseTask(type: ExerciseType, targetLanguage?: string): string {
+  switch (type) {
+    case "translate":
+      return targetLanguage ? `Translate into ${targetLanguage}.` : "Translate.";
+    case "fill_gap":
+      return "Write the missing word.";
+    case "pick_form":
+      return "Write the right form for the gap.";
+    case "fix_error":
+      return "This sentence has one mistake. Write it correctly.";
+    case "short_answer":
+      return "Answer in a few words.";
+    case "true_false":
+      return "True or false?";
+  }
+}
+
 export interface Rule {
   id: string;
   text: string;
@@ -58,6 +76,15 @@ export interface ReviewItem {
   status: "open" | "done";
 }
 
+/** An exercise answered correctly, kept so new batches practise the same rules with new content. */
+export interface MasteredItem {
+  topicId: string;
+  ruleId: string;
+  prompt: string;
+  answer: string;
+  masteredAt: string;
+}
+
 export interface Settings {
   /** The learner's own language: instructions and feedback are written in it. */
   language: string;
@@ -65,10 +92,11 @@ export interface Settings {
   count: number;
 }
 
-/** Everything stored per user: current progress only, no answer log. */
+/** Everything stored per user: current progress and a short list of mastered exercises, no answer log. */
 export interface Progress {
   topics: Topic[];
   review: ReviewItem[];
+  mastered: MasteredItem[];
   settings: Settings;
 }
 

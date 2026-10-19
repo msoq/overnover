@@ -1,5 +1,15 @@
-import { type ReactNode, useState } from "react";
-import { isRouteErrorResponse, Link, Links, Meta, Outlet, Scripts, ScrollRestoration } from "react-router";
+import { type ReactNode, useEffect, useRef, useState } from "react";
+import {
+  isRouteErrorResponse,
+  Link,
+  Links,
+  Meta,
+  Outlet,
+  Scripts,
+  ScrollRestoration,
+  useLocation,
+} from "react-router";
+import { Menu } from "./components/Menu";
 import { STORAGE } from "./lib/config";
 import { currentEmail } from "./lib/google";
 import { ProgressProvider, useProgress } from "./lib/progress";
@@ -55,26 +65,73 @@ export function ErrorBoundary({ error }: { error: unknown }) {
 }
 
 function Header() {
-  const { status, saving, saveError, retrySave, signOut } = useProgress();
+  const { status, saveError, retrySave, progress } = useProgress();
+  const { pathname } = useLocation();
+  // Practice and the new-topic steps have one job each, and with no topics yet the
+  // home screen shows the same button; a second one would only distract.
+  const showNew =
+    status === "ready" && progress.topics.length > 0 && pathname !== "/practice" && pathname !== "/new";
   return (
     <header className="top">
       <Link to="/" className="brand">
         Overnover
       </Link>
       <div className="row">
-        {saving && <span className="muted">Saving…</span>}
         {saveError && (
           <button type="button" className="link error" onClick={() => void retrySave()} title={saveError}>
             Not saved. Retry
           </button>
         )}
-        {STORAGE === "sheets" && status === "ready" && (
-          <button type="button" className="link" onClick={signOut} title={currentEmail()}>
-            Sign out
-          </button>
+        {showNew && (
+          <Link to="/new" className="button primary">
+            + New topic
+          </Link>
         )}
+        {status === "ready" && <AccountMenu />}
       </div>
     </header>
+  );
+}
+
+function AccountMenu() {
+  const email = STORAGE === "sheets" ? currentEmail() : undefined;
+  return (
+    <Menu label="Account" trigger={(email?.[0] ?? "☰").toUpperCase()}>
+      {(close) => <AccountPanel email={email} close={close} />}
+    </Menu>
+  );
+}
+
+/** Mounted on open, so the language field starts from the current setting. */
+function AccountPanel({ email, close }: { email?: string; close(): void }) {
+  const { progress, updateSettings, signOut } = useProgress();
+  const [language, setLanguage] = useState(progress.settings.language);
+  return (
+    <>
+      {email && <p className="muted">{email}</p>}
+      <form
+        className="stack"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (language.trim()) updateSettings({ language: language.trim() });
+          close();
+        }}
+      >
+        <label>
+          Your language
+          <input value={language} onChange={(e) => setLanguage(e.target.value)} />
+        </label>
+        <p className="muted small">Explanations and translation exercises use it.</p>
+        <button type="submit" disabled={!language.trim() || language.trim() === progress.settings.language}>
+          Save
+        </button>
+      </form>
+      {STORAGE === "sheets" && (
+        <button type="button" className="link" onClick={signOut}>
+          Sign out
+        </button>
+      )}
+    </>
   );
 }
 
@@ -108,7 +165,7 @@ function Gate() {
       </section>
     );
   }
-  if (!progress.settings.language) return <LanguageSetup />;
+  if (!progress.settings.language) return <GuessLanguage />;
   return <Outlet />;
 }
 
@@ -121,23 +178,14 @@ function guessLanguage(): string {
   }
 }
 
-function LanguageSetup() {
+/** First visit: take the browser's language instead of asking; it can be changed in the account menu. */
+function GuessLanguage() {
   const { updateSettings } = useProgress();
-  const [language, setLanguage] = useState(guessLanguage);
-  return (
-    <form
-      className="card stack"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (language.trim()) updateSettings({ language: language.trim() });
-      }}
-    >
-      <h1>Which language should I use with you?</h1>
-      <p className="muted">Instructions and feedback will be written in it. You can change it later.</p>
-      <input value={language} onChange={(e) => setLanguage(e.target.value)} aria-label="Your language" />
-      <button type="submit" className="primary">
-        Continue
-      </button>
-    </form>
-  );
+  const done = useRef(false);
+  useEffect(() => {
+    if (done.current) return;
+    done.current = true;
+    updateSettings({ language: guessLanguage() });
+  });
+  return null;
 }

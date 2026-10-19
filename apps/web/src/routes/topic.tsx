@@ -1,10 +1,10 @@
 import type { ExerciseType, Topic } from "@overnover/core";
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
-import { SessionOptions } from "../components/SessionOptions";
-import { generateExercises } from "../lib/api";
+import { Menu } from "../components/Menu";
+import { StartCard } from "../components/StartCard";
 import { useProgress } from "../lib/progress";
-import { saveSession } from "../lib/session";
+import { useStartSession } from "../lib/start";
 
 export default function TopicPage() {
   const { id } = useParams();
@@ -17,34 +17,25 @@ export default function TopicPage() {
       </p>
     );
   }
-  // Keyed so the edit form resets when another topic is opened.
+  // Keyed so the edit forms reset when another topic is opened.
   return <TopicView key={topic.id} topic={topic} />;
 }
 
+type Editing = "title" | "preferences" | undefined;
+
 function TopicView({ topic }: { topic: Topic }) {
-  const { progress, updateTopic, removeTopic, updateSettings } = useProgress();
+  const { updateTopic, removeTopic } = useProgress();
+  const startSession = useStartSession();
   const navigate = useNavigate();
-  const [draft, setDraft] = useState(topic);
+  const [editing, setEditing] = useState<Editing>();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
-  const dirty = JSON.stringify(draft) !== JSON.stringify(topic);
-  const mistakes = progress.review.filter((r) => r.topicId === topic.id && r.status === "open").length;
 
   async function start(types: ExerciseType[], count: number) {
     setBusy(true);
     setError(undefined);
     try {
-      const exercises = await generateExercises({
-        language: progress.settings.language,
-        topic,
-        types,
-        count,
-      });
-      updateSettings(
-        { types: { ...progress.settings.types, [topic.kind]: types }, count },
-        { persist: false },
-      );
-      saveSession({ label: topic.title, exercises, dueRules: [], answers: [], position: 0 });
+      await startSession(topic, types, count);
       navigate("/practice");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -55,90 +46,111 @@ function TopicView({ topic }: { topic: Topic }) {
   return (
     <div className="stack">
       <Link to="/" className="muted">
-        ← All topics
+        ← Topics
       </Link>
-      <h1>{topic.title}</h1>
-      <p className="muted">
-        {topic.subject}
-        {topic.targetLanguage ? ` · ${topic.targetLanguage}` : ""}
-        {mistakes ? ` · ${mistakes} to review` : ""}
-      </p>
+      <div className="row spread">
+        <h1>{topic.title}</h1>
+        <Menu label="Topic options" trigger="⋯">
+          {(close) => (
+            <>
+              <button
+                type="button"
+                className="link"
+                onClick={() => {
+                  setEditing("title");
+                  close();
+                }}
+              >
+                Rename
+              </button>
+              <button
+                type="button"
+                className="link"
+                onClick={() => {
+                  setEditing("preferences");
+                  close();
+                }}
+              >
+                Exercise preferences
+              </button>
+              <button
+                type="button"
+                className="link error"
+                onClick={() => {
+                  if (confirm(`Delete "${topic.title}"?`)) {
+                    removeTopic(topic.id);
+                    navigate("/");
+                  }
+                }}
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </Menu>
+      </div>
 
-      <SessionOptions kind={topic.kind} busy={busy} onStart={(types, count) => void start(types, count)} />
-      {error && <p className="error">{error}</p>}
+      {editing && (
+        <EditField
+          topic={topic}
+          field={editing}
+          onDone={(next) => {
+            if (next) updateTopic(next);
+            setEditing(undefined);
+          }}
+        />
+      )}
 
-      <section className="card stack">
-        <h2>Rules</h2>
-        <ol>
-          {topic.rules.map((r) => (
-            <li key={r.id}>{r.text}</li>
-          ))}
-        </ol>
-      </section>
+      <StartCard topic={topic} busy={busy} error={error} onStart={(t, c) => void start(t, c)} />
+    </div>
+  );
+}
 
-      <form
-        className="card stack"
-        onSubmit={(e) => {
-          e.preventDefault();
-          updateTopic(draft);
-        }}
-      >
-        <h2>Topic settings</h2>
+function EditField({
+  topic,
+  field,
+  onDone,
+}: {
+  topic: Topic;
+  field: "title" | "preferences";
+  onDone(next?: Topic): void;
+}) {
+  const [value, setValue] = useState(field === "title" ? topic.title : topic.instructions);
+  return (
+    <form
+      className="card stack"
+      onSubmit={(e) => {
+        e.preventDefault();
+        const trimmed = value.trim();
+        if (field === "title") onDone(trimmed ? { ...topic, title: trimmed } : undefined);
+        else onDone({ ...topic, instructions: trimmed });
+      }}
+    >
+      {field === "title" ? (
         <label>
           Title
-          <input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} />
+          <input value={value} onChange={(e) => setValue(e.target.value)} />
         </label>
+      ) : (
         <label>
-          Subject
-          <input value={draft.subject} onChange={(e) => setDraft({ ...draft, subject: e.target.value })} />
-        </label>
-        <label>
-          Kind
-          <select
-            value={draft.kind}
-            onChange={(e) =>
-              setDraft({ ...draft, kind: e.target.value === "language" ? "language" : "general" })
-            }
-          >
-            <option value="language">Language</option>
-            <option value="general">General</option>
-          </select>
-        </label>
-        {draft.kind === "language" && (
-          <label>
-            Language being learned
-            <input
-              value={draft.targetLanguage ?? ""}
-              onChange={(e) => setDraft({ ...draft, targetLanguage: e.target.value || undefined })}
-            />
-          </label>
-        )}
-        <label>
-          Instructions for the AI
+          Exercise preferences
           <textarea
             rows={4}
-            value={draft.instructions}
-            onChange={(e) => setDraft({ ...draft, instructions: e.target.value })}
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            placeholder="For example: B1 level, more translations from Russian"
           />
+          <span className="muted small">Used for the next exercises on this topic.</span>
         </label>
-        <div className="row">
-          <button type="submit" className="primary" disabled={!dirty}>
-            Save
-          </button>
-          <button
-            type="button"
-            className="link error"
-            onClick={() => {
-              if (confirm(`Delete "${topic.title}" and its review items?`)) {
-                removeTopic(topic.id);
-                navigate("/");
-              }
-            }}
-          >
-            Delete topic
-          </button>
-        </div>
-      </form>
-    </div>
+      )}
+      <div className="row">
+        <button type="submit" className="primary">
+          Save
+        </button>
+        <button type="button" className="link" onClick={() => onDone()}>
+          Cancel
+        </button>
+      </div>
+    </form>
   );
 }

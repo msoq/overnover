@@ -1,5 +1,12 @@
 // Converts progress to and from spreadsheet rows. Kept separate so it can be tested without Google.
-import { DEFAULT_SETTINGS, type Progress, type ReviewItem, type Settings, type Topic } from "@overnover/core";
+import {
+  DEFAULT_SETTINGS,
+  type MasteredItem,
+  type Progress,
+  type ReviewItem,
+  type Settings,
+  type Topic,
+} from "@overnover/core";
 
 export const TOPIC_COLUMNS = [
   "id",
@@ -14,6 +21,7 @@ export const TOPIC_COLUMNS = [
 ] as const;
 export const REVIEW_COLUMNS = ["topicId", "ruleId", "step", "dueAt", "status"] as const;
 export const SETTINGS_COLUMNS = ["key", "value"] as const;
+export const MASTERED_COLUMNS = ["topicId", "ruleId", "prompt", "answer", "masteredAt"] as const;
 
 type Row = (string | number)[];
 
@@ -65,6 +73,16 @@ export function rowToReview(r: Row): ReviewItem | undefined {
   return { topicId, ruleId, step: Number(step) || 0, dueAt, status: status === "done" ? "done" : "open" };
 }
 
+export function masteredToRow(m: MasteredItem): Row {
+  return [m.topicId, m.ruleId, m.prompt, m.answer, m.masteredAt];
+}
+
+export function rowToMastered(r: Row): MasteredItem | undefined {
+  const [topicId, ruleId, prompt, answer, masteredAt] = r.map((v) => String(v ?? ""));
+  if (!topicId || !prompt) return undefined;
+  return { topicId, ruleId, prompt, answer, masteredAt };
+}
+
 export function settingsToRows(s: Settings): Row[] {
   return [
     ["language", s.language],
@@ -88,10 +106,16 @@ export function rowsToSettings(rows: Row[]): Settings {
   };
 }
 
-export function rowsToProgress(topics: Row[], review: Row[], settings: Row[]): Progress {
+export function rowsToProgress(
+  topics: Row[],
+  review: Row[],
+  settings: Row[],
+  mastered: Row[] = [],
+): Progress {
   return {
     topics: topics.map(rowToTopic).filter((t): t is Topic => t !== undefined),
     review: review.map(rowToReview).filter((r): r is ReviewItem => r !== undefined),
+    mastered: mastered.map(rowToMastered).filter((m): m is MasteredItem => m !== undefined),
     settings: rowsToSettings(settings),
   };
 }

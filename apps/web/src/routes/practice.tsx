@@ -1,4 +1,4 @@
-import { EXERCISE_TYPE_LABELS, type Exercise, matchAnswer, normalizeAnswer } from "@overnover/core";
+import { EXERCISE_TYPES, type Exercise, exerciseTask, matchAnswer, normalizeAnswer } from "@overnover/core";
 import { useEffect, useRef, useState } from "react";
 import { Link, Navigate } from "react-router";
 import { Diff } from "../components/Diff";
@@ -13,6 +13,7 @@ import {
   type SavedSession,
   saveSession,
 } from "../lib/session";
+import { useStartSession } from "../lib/start";
 
 export default function Practice() {
   const [session, setSession] = useState(loadSession);
@@ -22,7 +23,8 @@ export default function Practice() {
     saveSession(next);
     setSession(next);
   };
-  if (session.position >= session.exercises.length) return <Summary session={session} />;
+  if (session.position >= session.exercises.length)
+    return <Summary session={session} onRestart={setSession} />;
   return <Step key={session.position} session={session} onChange={update} />;
 }
 
@@ -82,9 +84,7 @@ function Step({ session, onChange }: { session: SavedSession; onChange(s: SavedS
   return (
     <div className="stack">
       <div className="row spread muted">
-        <span>
-          {session.label} · {EXERCISE_TYPE_LABELS[exercise.type]}
-        </span>
+        <span>{session.label}</span>
         <span>
           {session.position + 1} / {session.exercises.length}
         </span>
@@ -92,7 +92,7 @@ function Step({ session, onChange }: { session: SavedSession; onChange(s: SavedS
       <progress value={session.position} max={session.exercises.length} />
 
       <section className="card stack">
-        <p className="muted">{exercise.instruction}</p>
+        <p className="muted">{exerciseTask(exercise.type, topic?.targetLanguage)}</p>
         <p className="prompt">{exercise.prompt}</p>
 
         {record ? (
@@ -117,7 +117,7 @@ function Step({ session, onChange }: { session: SavedSession; onChange(s: SavedS
               </button>
               {rule && (
                 <button type="button" className="link" onClick={() => setShowRule((v) => !v)}>
-                  {showRule ? "Hide rule" : "Show rule"}
+                  {showRule ? "Hide hint" : "Hint"}
                 </button>
               )}
               <button
@@ -125,7 +125,7 @@ function Step({ session, onChange }: { session: SavedSession; onChange(s: SavedS
                 className="link"
                 onClick={() => record_({ answer, outcome: "revealed", correct: exercise.acceptedAnswers[0] })}
               >
-                Reveal answer
+                I don't know
               </button>
             </div>
             {showRule && rule && <p className="hint">{rule.text}</p>}
@@ -160,24 +160,38 @@ function Feedback({ record }: { record: AnswerRecord }) {
       </div>
     );
   }
+  // Wrong or revealed: the learner's answer above the correct one, so they can compare.
   return (
     <div className="bad stack">
-      <p>{record.outcome === "revealed" ? "The answer is:" : "Not quite. The answer is:"}</p>
-      <p className="answer">{record.correct}</p>
+      {record.answer.trim() && (
+        <div>
+          <p className="label">Your answer</p>
+          <p className="answer mine">{record.answer}</p>
+        </div>
+      )}
+      <div>
+        <p className="label">Correct</p>
+        <p className="answer">{record.correct}</p>
+      </div>
       {record.explanation && <p>{record.explanation}</p>}
     </div>
   );
 }
 
-function Summary({ session }: { session: SavedSession }) {
-  const { finishSession, saving, saveError } = useProgress();
+function Summary({ session, onRestart }: { session: SavedSession; onRestart(s: SavedSession): void }) {
+  const { progress, finishSession } = useProgress();
+  const startSession = useStartSession();
   const saved = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const topic = progress.topics.find((t) => t.id === session.topicId);
   const results = session.exercises.map((e, i) => ({ exercise: e, record: session.answers[i] }));
   const right = results.filter((r) => r.record && isCorrect(r.record.outcome)).length;
 
   useEffect(() => {
     if (saved.current) return;
     saved.current = true;
+    const masteredAt = new Date().toISOString();
     finishSession(
       results
         .filter((r) => r.record)
@@ -187,9 +201,32 @@ function Summary({ session }: { session: SavedSession }) {
           correct: isCorrect(record.outcome),
           isReview: session.dueRules.includes(ruleKey(exercise.topicId, exercise.ruleId)),
         })),
+      results
+        .filter((r) => r.record && isCorrect(r.record.outcome))
+        .map(({ exercise, record }) => ({
+          topicId: exercise.topicId,
+          ruleId: exercise.ruleId,
+          prompt: exercise.prompt,
+          answer: record.correct ?? record.answer,
+          masteredAt,
+        })),
     );
     clearSession();
   });
+
+  async function more() {
+    if (!topic) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const { types, count } = progress.settings;
+      const chosen = types[topic.kind]?.length ? types[topic.kind] : [...EXERCISE_TYPES[topic.kind]];
+      onRestart(await startSession(topic, chosen ?? [], count));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+      setBusy(false);
+    }
+  }
 
   const missed = results.filter((r) => r.record && !isCorrect(r.record.outcome));
   return (
@@ -197,21 +234,27 @@ function Summary({ session }: { session: SavedSession }) {
       <h1>
         {right} of {session.exercises.length} correct
       </h1>
-      <p className="muted">{saving ? "Saving…" : saveError ? "Not saved yet." : "Progress saved."}</p>
       {missed.length > 0 && (
         <section className="card stack">
-          <h2>To review</h2>
+          <h2>Mistakes</h2>
           <ul className="list">
             {missed.map(({ exercise, record }) => (
               <MissedItem key={exercise.id} exercise={exercise} correct={record.correct ?? ""} />
             ))}
           </ul>
-          <p className="muted">These come back for review tomorrow.</p>
         </section>
       )}
-      <Link to="/" className="button primary">
-        Done
-      </Link>
+      <div className="row">
+        {topic && (
+          <button type="button" className="primary" disabled={busy} onClick={() => void more()}>
+            {busy ? "Writing exercises…" : `${progress.settings.count} more`}
+          </button>
+        )}
+        <Link to="/" className="button">
+          Done
+        </Link>
+      </div>
+      {error && <p className="error">{error}</p>}
     </div>
   );
 }

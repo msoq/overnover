@@ -8,6 +8,8 @@ import { type AiEnv, checkAnswer, generateExercises, readTopic } from "./ai";
 type Env = AiEnv & { WEB_ORIGIN: string };
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024;
+/** Matches the per-topic cap on mastered exercises, with room for older clients. */
+const MAX_AVOID = 60;
 
 export const app = new Hono<{ Bindings: Env }>();
 
@@ -45,6 +47,9 @@ app.post("/api/exercises", async (c) => {
   if (!body.ruleIds && (!Number.isInteger(body.count) || body.count < 1 || body.count > 50)) {
     bad("Count must be between 1 and 50");
   }
+  body.avoid = (Array.isArray(body.avoid) ? body.avoid : [])
+    .filter((a) => typeof a?.prompt === "string" && typeof a.answer === "string")
+    .slice(-MAX_AVOID);
   return c.json({ exercises: await generateExercises(c.env, body) });
 });
 

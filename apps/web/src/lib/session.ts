@@ -14,6 +14,8 @@ export interface AnswerRecord {
 
 export interface SavedSession {
   label: string;
+  /** The topic practised, so the summary can offer another batch. Missing in older sessions. */
+  topicId?: string;
   exercises: Exercise[];
   /** `topicId:ruleId` of review items that were due when the session started. */
   dueRules: string[];

@@ -1,6 +1,6 @@
 import type { Progress } from "@overnover/core";
 import { describe, expect, it } from "vitest";
-import { reviewToRow, rowsToProgress, settingsToRows, topicToRow } from "./rows";
+import { masteredToRow, reviewToRow, rowsToProgress, settingsToRows, topicToRow } from "./rows";
 
 describe("sheet rows", () => {
   it("round-trips progress", () => {
@@ -19,6 +19,15 @@ describe("sheet rows", () => {
         },
       ],
       review: [{ topicId: "t1", ruleId: "r1", step: 1, dueAt: "2026-10-21T00:00:00.000Z", status: "open" }],
+      mastered: [
+        {
+          topicId: "t1",
+          ruleId: "r1",
+          prompt: "Juan ___ en casa.",
+          answer: "está",
+          masteredAt: "2026-10-19T00:00:00.000Z",
+        },
+      ],
       settings: { language: "English", types: { language: ["translate"] }, count: 12 },
     };
     // The Sheets API returns every cell as a string.
@@ -27,6 +36,7 @@ describe("sheet rows", () => {
       asCells(progress.topics.map(topicToRow)),
       asCells(progress.review.map(reviewToRow)),
       asCells(settingsToRows(progress.settings)),
+      asCells(progress.mastered.map(masteredToRow)),
     );
     expect(back).toEqual(progress);
   });
@@ -36,6 +46,7 @@ describe("sheet rows", () => {
     expect(back.topics).toHaveLength(1);
     expect(back.topics[0].rules).toEqual([]);
     expect(back.review).toEqual([]);
+    expect(back.mastered).toEqual([]);
     expect(back.settings.count).toBe(10);
   });
 });

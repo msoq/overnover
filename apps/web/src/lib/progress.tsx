@@ -1,7 +1,14 @@
 // Holds the user's progress in memory: one read when the app opens, one write when
 // something worth keeping changes (a new topic, a finished session). Until a write
 // succeeds, the latest snapshot also sits in localStorage so nothing is lost.
-import { applyOutcomes, type Progress, type Settings, type Topic } from "@overnover/core";
+import {
+  addMastered,
+  applyOutcomes,
+  type MasteredItem,
+  type Progress,
+  type Settings,
+  type Topic,
+} from "@overnover/core";
 import {
   createContext,
   type ReactNode,
@@ -48,10 +55,16 @@ interface ProgressContext {
   removeTopic(id: string): void;
   /** `persist: false` keeps the change in this browser until the next write. */
   updateSettings(patch: Partial<Settings>, options?: { persist?: boolean }): void;
-  finishSession(outcomes: Outcome[]): void;
+  /** Applies the outcomes to the review schedule and remembers the correctly answered exercises. */
+  finishSession(outcomes: Outcome[], mastered: MasteredItem[]): void;
 }
 
-const EMPTY: Progress = { topics: [], review: [], settings: { language: "", types: {}, count: 10 } };
+const EMPTY: Progress = {
+  topics: [],
+  review: [],
+  mastered: [],
+  settings: { language: "", types: {}, count: 10 },
+};
 const Ctx = createContext<ProgressContext | undefined>(undefined);
 
 const pendingKey = () => `overnover.pending.${currentEmail() ?? "local"}`;
@@ -98,7 +111,8 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
     try {
       const loaded = await store.load();
       const pending = readPending();
-      const next = pending ?? loaded;
+      // Snapshots and local progress saved before mastered exercises existed lack the list.
+      const next = { ...(pending ?? loaded), mastered: (pending ?? loaded).mastered ?? [] };
       latest.current = next;
       setProgress(next);
       setStatus("ready");
@@ -178,10 +192,16 @@ export function ProgressProvider({ children }: { children: ReactNode }) {
         ...p,
         topics: p.topics.filter((t) => t.id !== id),
         review: p.review.filter((r) => r.topicId !== id),
+        mastered: p.mastered.filter((m) => m.topicId !== id),
       })),
     updateSettings: (patch, options) =>
       commit((p) => ({ ...p, settings: { ...p.settings, ...patch } }), options?.persist ?? true),
-    finishSession: (outcomes) => commit((p) => ({ ...p, review: applyOutcomes(p.review, outcomes) })),
+    finishSession: (outcomes, mastered) =>
+      commit((p) => ({
+        ...p,
+        review: applyOutcomes(p.review, outcomes),
+        mastered: addMastered(p.mastered, mastered),
+      })),
   };
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;

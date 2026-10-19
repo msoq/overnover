@@ -1,5 +1,5 @@
 // Request and response shapes shared by the web app and the API Worker.
-import type { Exercise, ExerciseType, Topic, TopicKind } from "./types";
+import type { Exercise, ExerciseType, MasteredItem, Topic, TopicKind } from "./types";
 
 export interface MaterialFile {
   name: string;
@@ -35,6 +35,8 @@ export interface GenerateRequest {
   count: number;
   /** For review: one exercise per listed rule, in this order. */
   ruleIds?: string[];
+  /** Exercises the learner already answered correctly: not to be repeated. */
+  avoid?: Pick<MasteredItem, "prompt" | "answer">[];
 }
 
 export interface GenerateResponse {

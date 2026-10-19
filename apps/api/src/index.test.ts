@@ -109,5 +109,15 @@ describe("helpers", () => {
       ["short_answer", "r1"],
       ["true_false", "r2"],
     ]);
+
+    const req = {
+      language: "English",
+      topic,
+      types: ["true_false" as const],
+      avoid: [{ prompt: "Q3!", answer: "false" }],
+    };
+    expect(sanitizeExercises(raw, { ...req, count: 10 }).map((e) => e.prompt)).toEqual(["q"]);
+    // Review keeps the repeat so each listed rule still gets an exercise.
+    expect(sanitizeExercises(raw, { ...req, count: 0, ruleIds: ["r1", "r1", "r1", "r2"] })).toHaveLength(2);
   });
 });

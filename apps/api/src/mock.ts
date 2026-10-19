@@ -78,10 +78,16 @@ export function readTopic(req: ReadTopicRequest): ReadTopicResponse {
 
 export function generateExercises(req: GenerateRequest): Omit<Exercise, "id" | "topicId">[] {
   const n = req.ruleIds?.length ?? req.count;
-  return Array.from({ length: n }, (_, i) => ({
-    ...SAMPLES[req.types[i % req.types.length]],
-    ruleId: req.ruleIds?.[i] ?? req.topic.rules[i % req.topic.rules.length].id,
-  }));
+  return Array.from({ length: n }, (_, i) => {
+    const sample = SAMPLES[req.types[i % req.types.length]];
+    // A tag keeps prompts unique, so mastered exercises don't filter the whole mock batch away.
+    const tag = crypto.randomUUID().slice(0, 4);
+    return {
+      ...sample,
+      prompt: `${sample.prompt} [${tag}]`,
+      ruleId: req.ruleIds?.[i] ?? req.topic.rules[i % req.topic.rules.length].id,
+    };
+  });
 }
 
 export function checkAnswer(req: CheckRequest): CheckResponse {

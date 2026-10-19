@@ -5,6 +5,7 @@ import {
   type Exercise,
   type ExerciseType,
   type GenerateRequest,
+  isRepeat,
   type ReadTopicRequest,
   type ReadTopicResponse,
 } from "@overnover/core";
@@ -95,8 +96,18 @@ const TYPE_GUIDE: Record<ExerciseType, (t: TopicForAi, language: string) => stri
     `"true_false": prompt is a statement that is clearly true or false; acceptedAnswers are the words for true or false in English and in ${l} (e.g. ["false", "ложь", "неверно"]).`,
 };
 
+/** Exercises already mastered, so the model writes similar ones with new content instead of repeating them. */
+function avoidBlock(avoid: GenerateRequest["avoid"]): string {
+  if (!avoid?.length) return "";
+  const list = avoid.map((a) => `- ${a.prompt} → ${a.answer}`).join("\n");
+  return `The learner already answered these exercises correctly (exercise → answer):
+${list}
+Don't repeat them or closely paraphrase them. Practise the same rules in the same style, but with new sentences, vocabulary, situations and facts.
+`;
+}
+
 function buildGenerateMessages(req: GenerateRequest): ChatMessage[] {
-  const { topic, types, count, ruleIds, language } = req;
+  const { topic, types, count, ruleIds, language, avoid } = req;
   const rules = topic.rules.map((r) => `- ${r.id}: ${r.text}`).join("\n");
   const plan = ruleIds
     ? `Write exactly ${ruleIds.length} exercises, one per rule in this order: ${ruleIds.join(", ")}. Each must use new content, not an example from the material. Pick any allowed type for each.`
@@ -117,7 +128,7 @@ ${topic.sourceText}
 Allowed exercise types:
 ${types.map((t) => TYPE_GUIDE[t](topic, language)).join("\n")}
 
-${plan}
+${avoidBlock(avoid)}${plan}
 Each exercise has "instruction": one short line in ${language} telling the learner what to do, and "ruleId": the id of the rule it practises.
 acceptedAnswers must be complete and correct, since answers are checked against them exactly. Never reveal the answer in the prompt or instruction.
 Return JSON: {"exercises": [{"type": "...", "instruction": "...", "prompt": "...", "ruleId": "...", "acceptedAnswers": ["..."]}]}`,
@@ -128,15 +139,20 @@ Return JSON: {"exercises": [{"type": "...", "instruction": "...", "prompt": "...
 
 type RawExercise = Partial<Omit<Exercise, "id" | "topicId">>;
 
-/** Drops malformed exercises and pins type and rule ids to known values. */
+/**
+ * Drops malformed exercises and pins type and rule ids to known values. Outside
+ * review it also drops repeats of mastered exercises the model wrote anyway.
+ */
 export function sanitizeExercises(raw: RawExercise[], req: GenerateRequest): Exercise[] {
-  const { topic, types, ruleIds } = req;
+  const { topic, types, ruleIds, avoid = [] } = req;
   const allowed = new Set<string>(EXERCISE_TYPES[topic.kind]);
   const ruleSet = new Set(topic.rules.map((r) => r.id));
   const limit = ruleIds?.length ?? req.count;
   return raw
     .map((e, i): Exercise | undefined => {
       if (!e || typeof e.prompt !== "string" || !e.prompt.trim()) return undefined;
+      // In review every listed rule needs its exercise, so a repeat is better than a gap.
+      if (!ruleIds && isRepeat(e.prompt, avoid)) return undefined;
       const acceptedAnswers = (Array.isArray(e.acceptedAnswers) ? e.acceptedAnswers : [])
         .filter((a): a is string => typeof a === "string" && a.trim() !== "")
         .map((a) => a.trim());

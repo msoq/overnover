@@ -19,7 +19,7 @@ class LocalStore implements ProgressStore {
     } catch {
       // Storage unavailable or corrupt: start empty.
     }
-    return { topics: [], review: [], settings: { ...DEFAULT_SETTINGS } };
+    return { topics: [], review: [], mastered: [], settings: { ...DEFAULT_SETTINGS } };
   }
 
   async save(progress: Progress): Promise<void> {

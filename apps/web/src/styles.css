@@ -283,6 +283,17 @@ progress {
   color: var(--text);
 }
 
+.bad p.label {
+  color: var(--muted);
+  font-size: 0.85rem;
+  margin-bottom: 2px;
+}
+
+.bad .answer.mine {
+  color: var(--text);
+  font-weight: 400;
+}
+
 .hint {
   background: var(--hint-bg);
   border-radius: 8px;
@@ -298,4 +309,76 @@ progress {
 .diff del {
   color: var(--bad);
   opacity: 0.8;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+.menu {
+  position: relative;
+}
+
+.menu-trigger {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 10;
+  min-width: 240px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 0.15);
+}
+
+.menu-panel button.link {
+  text-align: left;
+}
+
+.topics {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.topic {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text);
+  text-decoration: none;
+}
+
+.topic:hover {
+  border-color: var(--accent);
+}
+
+.attach {
+  flex-direction: row;
+  cursor: pointer;
+  color: var(--accent);
+}
+
+.attach input {
+  display: none;
+}
+
+.empty {
+  padding: 40px 16px;
+}
+
+.stack > button.link {
+  align-self: flex-start;
 }

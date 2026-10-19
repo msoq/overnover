@@ -1,0 +1,32 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "api-mock",
+      "runtimeExecutable": "pnpm",
+      "runtimeArgs": [
+        "--filter",
+        "@overnover/api",
+        "exec",
+        "wrangler",
+        "dev",
+        "--port",
+        "8788",
+        "--var",
+        "MOCK_AI:1",
+        "--var",
+        "WEB_ORIGIN:http://localhost:5174"
+      ],
+      "port": 8788
+    },
+    {
+      "name": "web-mock",
+      "runtimeExecutable": "bash",
+      "runtimeArgs": [
+        "-c",
+        "cd apps/web && VITE_API_URL=http://localhost:8788 pnpm exec react-router dev --port 5174"
+      ],
+      "port": 5174
+    }
+  ]
+}
